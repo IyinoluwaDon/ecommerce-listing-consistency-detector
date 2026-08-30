@@ -1,0 +1,13 @@
+torch
+torchvision
+transformers
+scikit-learn
+pandas
+numpy
+pillow
+fastapi
+uvicorn
+python-multipart
+streamlit
+requests
+matplotlib
