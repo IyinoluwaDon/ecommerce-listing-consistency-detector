@@ -1,5 +1,7 @@
 # Multimodal Content Moderation: Text-Image Consistency Detection
 
+**🔗 Live Demo:** [huggingface.co/spaces/iyinoluwa/moderation-demo](https://huggingface.co/spaces/iyinoluwa/moderation-demo)
+
 ## Problem
 
 E-commerce platforms need to catch listings where the product photo doesn't
@@ -135,7 +137,7 @@ the model to learn finer-grained alignment).
 ## Repository structure
 
 ```
-moderation-project/
+moderation-project/                  # this repo: training, experimentation, methodology
 ├── data/                          # CSVs, images, saved splits/metrics (not versioned)
 ├── notebooks/
 │   └── moderation_pipeline_v2.ipynb   # end-to-end pipeline, run in Colab (T4 GPU)
@@ -143,6 +145,13 @@ moderation-project/
 │   └── build_labels.py            # standalone label-construction script
 └── README.md
 ```
+
+**Note:** the deployed demo lives in a **separate** repo
+(`moderation-demo`, deployed on Hugging Face Spaces — see live demo link
+above), since Spaces requires its own git remote. That repo only contains
+the minimal inference app (`app.py`, `requirements.txt`,
+`fusion_model_final.pt`) — it does not duplicate the training code or data
+already documented here.
 
 ## Reproducing results
 
