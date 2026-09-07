@@ -140,7 +140,7 @@ the model to learn finer-grained alignment).
 moderation-project/                  # this repo: training, experimentation, methodology
 ├── data/                          # CSVs, images, saved splits/metrics (not versioned)
 ├── notebooks/
-│   └── moderation_pipeline_v2.ipynb   # end-to-end pipeline, run in Colab (T4 GPU)
+│   └── moderation_pipeline.ipynb   # end-to-end pipeline, run in Colab (T4 GPU)
 ├── src/
 │   └── build_labels.py            # standalone label-construction script
 └── README.md
@@ -158,6 +158,6 @@ already documented here.
 1. Download `X_train_update.csv`, `Y_train_CVw08PX.csv`, `images.zip` from
    the [ENS Challenge Data page](https://challengedata.ens.fr/challenges/35)
 2. Place in Google Drive at `moderation-project/data/`
-3. Open `notebooks/moderation_pipeline_v2.ipynb` in Colab, set runtime to
+3. Open `notebooks/moderation_pipeline.ipynb` in Colab, set runtime to
    T4 GPU, run top to bottom
 4. Metrics accumulate in `data/metrics.json`; model weights save every epoch

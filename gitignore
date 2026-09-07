@@ -1,6 +1,14 @@
-data/
+# Data (too large for git, and not yours to redistribute)
+data/*.csv
+data/*.zip
+data/images_sample/
+data/*.pt
+data/*.json
+data/images/
+data/images.zip
 
 
+# Model weights (too large for git — use Git LFS or external hosting instead)
 *.pt
 *.pth
 *.safetensors
