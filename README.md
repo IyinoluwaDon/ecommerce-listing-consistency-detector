@@ -2,162 +2,161 @@
 
 **🔗 Live Demo:** [huggingface.co/spaces/iyinoluwa/moderation-demo](https://huggingface.co/spaces/iyinoluwa/moderation-demo)
 
-## Problem
+*A machine learning system that checks whether a product's photo actually matches its description — try it live using the link above.*
 
-E-commerce platforms need to catch listings where the product photo doesn't
-match the title/description — a common real-world signal of recycled stock
-photos, mislabeled uploads, or bait-and-switch listings. This is one practical
-input into a broader content-moderation pipeline (alongside policy/category
-checks, seller history, etc.).
+---
 
-**Why this needs both modalities:** a listing's text can look perfectly
-normal in isolation, and its image can look perfectly normal in isolation —
-the problem is only visible when you check whether the two *agree* with each
-other. Neither a text-only nor an image-only model has any way to detect
-that; only a model that reasons over both together can.
+## 1. The Problem (in plain English)
 
-## Why a proxy task, and why it's still a valid demonstration
+When you shop online, every product listing has two parts: a **photo** and a **text description**. Most of the time these match — a photo of a blue vase, titled "Blue ceramic vase."
 
-No public dataset contains genuine content-moderation-violation labels (real
-platforms don't release that data, for obvious reasons). We evaluated
-several alternatives before settling on the current design:
+But sometimes they don't match, because of:
+- A seller reusing an old photo for a new, different product
+- Copy-paste mistakes during bulk uploads
+- Deliberately misleading photos (showing something nicer than what's actually sold)
 
-- **Real prohibited-item categories** (weapons, drugs) — the only academic
-  dataset found with genuine categories like this
-  ([Scientific Reports, 2025](https://www.nature.com/articles/s41598-025-07043-0))
-  requires a gated access request and a non-commercial data-use agreement, so
-  it isn't freely available for a self-contained portfolio project.
-- **Arbitrary category flagging** on this dataset — rejected. The Rakuten
-  catalog used here (books, toys, furniture, games) contains no genuinely
-  restricted categories; manually keyword-searching the full dataset for
-  weapon/drug-adjacent terms turned up only false positives (e.g. "gunpowder
-  tea", a kitchen "knife" scraper, a toy water pistol) — confirming there is
-  no real signal to exploit here.
-- **Text-image mismatch detection (used here)** — a defensible, well-labeled
-  proxy for a real moderation signal. Ground truth is constructed by
-  deliberately swapping ~25% of images with a donor from a semantically
-  distant category, leaving text untouched. This makes the task genuinely
-  require cross-modal reasoning: text alone cannot know its image is wrong,
-  and vice versa.
+Large marketplaces (Amazon, Jumia, Etsy, etc.) need a way to **automatically flag listings where the photo and text don't agree**, so a human moderator can review them before the listing goes live to shoppers.
 
-## Dataset
+**The catch:** to catch this, you can't just look at the text alone (it might read perfectly fine on its own) or the photo alone (it might be a perfectly normal photo of *something*). You only catch the problem by checking whether the two **agree with each other**. That requires an AI system that looks at both at the same time — this is called a "multimodal" system, because it combines two modes of information (text + images).
 
-[Rakuten France Multimodal Product Data Challenge](https://challengedata.ens.fr/challenges/35)
-— 84,916 product listings with title (`designation`), optional description,
-and a linked product image, across 27 category codes.
+## 2. The Solution This Project Offers
 
-## Label construction
+This project builds and trains exactly that: an AI model that takes in a product's **title + description** and its **photo**, and predicts one of two things:
 
-See `src/build_labels.py`. Summary:
-- 75% of listings keep their genuine image (label = `compliant`)
-- 25% have their image swapped with a listing from a different, semantically
-  distant category group (label = `non-compliant`) — grouped into
-  `books_media`, `toys_games_figures`, `home_furniture_garden` based on
-  manual inspection of sample listings per category code
-- Swap rate is verified balanced across all three groups (~25% each), so the
-  label isn't confounded with any single category
+- ✅ **Compliant** — the text and photo genuinely go together
+- ⚠️ **Non-compliant** — the text and photo appear to be mismatched
 
-## Models & ablation
+To prove this works, three different models were built and compared:
+1. A model that only looks at the **text** (to prove text alone isn't enough)
+2. A model that only looks at the **image** (to prove image alone isn't enough)
+3. The final **fusion model** that looks at both together (and performs dramatically better than either alone — more than double the accuracy on catching mismatches)
 
-All three models train and evaluate on an **identical fixed subsample**
-(20,000 rows, 80/20 stratified split, seed=42) — necessary for a fair,
-apples-to-apples comparison.
+This comparison is the core scientific result of the project: it proves that combining both types of information is genuinely necessary, not just a nice-to-have.
 
-| Model | Description | F1 (non-compliant) |
+## 3. A Concrete Example
+
+Imagine a listing on an e-commerce site:
+
+> **Title:** "Piscine hors sol gré 915 x 470 cm" (Above-ground pool)
+> **Photo:** [a photo of a motorcycle helmet]
+
+A human glancing at just the title thinks it's a normal pool listing. A human glancing at just the photo thinks it's a normal helmet photo. It's only when you look at **both together** that something is obviously wrong. This is exactly the kind of error this system is built to catch automatically, at a scale no team of human moderators could keep up with manually — a real platform receives thousands of new listings per day.
+
+## 4. Why the Data Isn't "Real Prohibited Items"
+
+An early goal for this project was to detect literally prohibited items (like weapons or drugs) in listings. After real investigation, it turned out **no public, freely-available dataset contains genuine examples of this** — for obvious reasons, platforms don't publish real fraud/violation data. The one academic dataset found with real examples requires a formal, gated request process and comes with legal restrictions on reuse.
+
+So instead, this project uses a well-documented **substitute problem that requires the exact same underlying skill**: instead of "photo doesn't match a policy," it's "photo doesn't match the text" — deliberately created by taking real product listings and swapping 25% of their photos with an unrelated product's photo. This is a standard, respected technique in machine learning research when real-world labeled data isn't available, and it proves the same core capability: a model that can genuinely check agreement between text and images.
+
+## 5. Results
+
+| Model | Score (F1, higher is better) | What it tells us |
 |---|---|---|
-| Text-only | TF-IDF (1-2 grams) + Logistic Regression | 0.298 |
-| Image-only | Pretrained ResNet18, fine-tuned, 4 epochs | 0.253 |
-| **Fusion** | See architecture below, 4 epochs | **0.630** |
+| Text-only | 0.30 | Text alone barely does better than guessing — expected, since text doesn't change when the photo is swapped |
+| Image-only | 0.25 | Image alone also barely beats guessing — expected, since a swapped-in photo is still a perfectly normal photo of *something* |
+| **Fusion (both together)** | **0.63** | More than double either baseline — proves the model is genuinely learning to compare the two |
 
-**Result:** both unimodal baselines sit near the floor expected of a model
-with no real signal on this task (by construction — text is untouched by the
-swap, and a swapped-in image is itself a perfectly normal photo of *some*
-product). Fusion more than doubles the F1 of either baseline, with training
-loss decreasing steadily (0.66 → 0.36) rather than overfitting noise —
-strong evidence the model is learning genuine cross-modal alignment, not a
-spurious shortcut.
+## 6. Folder Structure — What Each File Does
 
-### Fusion architecture
+This project lives across **two separate places**: a GitHub repository (for the research/training code) and a Hugging Face Space (for the live, working demo). This split is standard practice — the research code and the deployed app serve different purposes and don't need to live together.
 
-Detecting a mismatch is a *comparison* task, not a "predict from a pile of
-features" task — naively concatenating two embeddings gives a classifier no
-explicit signal about how the two relate. Instead:
-
-1. Text: frozen `distilbert-base-multilingual-cased`, CLS token, precomputed
-   once (French listings)
-2. Image: fine-tuned pretrained ResNet18, 512-dim features
-3. Both projected to a shared 256-dim space
-4. Classifier input: `[text, image, |text − image|, text × image]` — the
-   difference and product terms give the model direct access to how aligned
-   or misaligned the pair is, following the standard approach used in
-   NLI/sentence-matching models
-
-## Error analysis
-
-Confusion matrix (fusion model, validation set, n=4000):
-
-|  | Predicted compliant | Predicted non-compliant |
-|---|---|---|
-| **Actual compliant** | 2561 | 436 |
-| **Actual non-compliant** | 341 | 662 |
-
-- Recall on non-compliant: 66% (662 / 1003) — catches 2 in 3 real mismatches
-- Precision on non-compliant: 60% (662 / 1098) — 6 in 10 flags are genuine
-
-**Pattern in the errors:** both false negatives (missed mismatches) and
-false positives (genuine listings incorrectly flagged) are overwhelmingly
-concentrated in the `home_furniture_garden` category group — pool
-equipment, kitchen tools, garden hoses, cushions, all sharing one broad
-label. This makes sense: that group is far more visually and topically
-heterogeneous than `books_media` or `toys_games_figures`, so a swapped
-image *within* it looks less obviously "wrong" than a swap between visually
-distinct domains (e.g. a book cover swapped for a toy photo). The
-practical implication: **the model's mismatch signal is strongest across
-visually distinct domains and weakest within broad, heterogeneous
-categories** — a natural target for future improvement (e.g. harder
-negative mining that swaps within visually similar sub-categories, forcing
-the model to learn finer-grained alignment).
-
-
-
-- **Proxy task, not real violation data.** Results demonstrate the
-  underlying multimodal capability (detecting engineered inconsistency), not
-  performance on genuine policy violations, which would require labeled data
-  this project does not have access to.
-- **Trained on a 20K-row subsample**, not the full 84,916 rows, due to
-  free-tier Colab compute constraints. Full-scale training is a
-  straightforward extension.
-- **Text encoder is frozen** (not fine-tuned) for training speed; end-to-end
-  fine-tuning is a reasonable next step given more compute budget.
-- **F1 of 0.63 on the minority class**, while a large improvement over
-  baselines, still leaves room for improvement — e.g. harder negative
-  mining (swapping within similar-looking categories, not just across
-  distant groups), more epochs, or a larger training set.
-
-## Repository structure
+### GitHub repo: `ecommerce_moderation`
 
 ```
-moderation-project/                  # this repo: training, experimentation, methodology
-├── data/                          # CSVs, images, saved splits/metrics (not versioned)
+ecommerce_moderation/
+├── data/                              (not uploaded to GitHub — too large)
+│   Contains: the raw product data (CSVs) and product images downloaded
+│   from the dataset source, plus files the notebook generates while running
+│   (the labeled dataset, saved model checkpoints, results).
+│
 ├── notebooks/
-│   └── moderation_pipeline.ipynb   # end-to-end pipeline, run in Colab (T4 GPU)
+│   └── moderation_pipeline_v2.ipynb
+│   This is the main file. It's a Google Colab notebook containing ALL the
+│   code: loading data, building the mismatch labels, training all three
+│   models, and printing the results. Anyone can open this in Google Colab
+│   and re-run the entire project from scratch.
+│
 ├── src/
-│   └── build_labels.py            # standalone label-construction script
-└── README.md
+│   └── build_labels.py
+│   A standalone version of the "label building" logic from the notebook
+│   (the part that decides which listings get a swapped photo). Kept
+│   separate so it can be reused or tested independently of the notebook.
+│
+├── README.md
+│   This file — explains the whole project.
+│
+├── requirements.txt
+│   A list of all the software packages needed to run this project
+│   (e.g. PyTorch, scikit-learn). Running `pip install -r requirements.txt`
+│   installs everything at once.
+│
+└── .gitignore
+    A configuration file that tells Git (the version control tool) which
+    files to NOT upload to GitHub — mainly the large data files and model
+    weights, which don't belong in a code repository.
 ```
 
-**Note:** the deployed demo lives in a **separate** repo
-(`moderation-demo`, deployed on Hugging Face Spaces — see live demo link
-above), since Spaces requires its own git remote. That repo only contains
-the minimal inference app (`app.py`, `requirements.txt`,
-`fusion_model_final.pt`) — it does not duplicate the training code or data
-already documented here.
+### Hugging Face Space: `moderation-demo` (separate repo)
 
-## Reproducing results
+```
+moderation-demo/
+├── app.py
+│   The actual code that runs the live demo website. Loads the trained
+│   model and creates the web interface (upload a photo, type a title,
+│   click a button, see the result) using a tool called Gradio.
+│
+├── requirements.txt
+│   Same idea as above, but only the packages needed to RUN the demo
+│   (not to train the model).
+│
+└── fusion_model_final.pt
+    The actual trained model — this is the "brain" that was produced by
+    running the notebook. It's a large file (the model's learned
+    parameters) that app.py loads when the demo starts up.
+```
 
-1. Download `X_train_update.csv`, `Y_train_CVw08PX.csv`, `images.zip` from
-   the [ENS Challenge Data page](https://challengedata.ens.fr/challenges/35)
-2. Place in Google Drive at `moderation-project/data/`
-3. Open `notebooks/moderation_pipeline.ipynb` in Colab, set runtime to
-   T4 GPU, run top to bottom
-4. Metrics accumulate in `data/metrics.json`; model weights save every epoch
+## 7. How the Model Was Built (Step by Step)
+
+1. **Got the data** — downloaded ~85,000 real product listings (title, description, photo) from a public dataset released by Rakuten (a French e-commerce company) for a research competition.
+2. **Created the "mismatch" labels** — since no real mismatch data exists publicly, 25% of listings had their photo swapped with an unrelated product's photo, and everything was recorded so we know exactly which listings are genuine vs. swapped.
+3. **Built and tested a text-only model** — proved text alone can't solve this (as expected).
+4. **Built and tested an image-only model** — proved image alone can't solve this either (as expected).
+5. **Built the fusion model** — combined both, using two AI building blocks: DistilBERT (a language-understanding model) for text, and ResNet18 (an image-understanding model) for photos. It compares the two directly, and dramatically outperforms both single-mode models.
+6. **Trained everything on Google Colab** (a free, cloud-based platform Google provides for running Python code with GPU acceleration, which speeds up AI training significantly).
+7. **Deployed the winning (fusion) model** to Hugging Face Spaces, a free hosting service specifically built for sharing AI demos publicly.
+
+## 8. Deployment: How It Went Live
+
+1. Created a free account on [Hugging Face](https://huggingface.co) (a platform for hosting and sharing AI models/demos)
+2. Created a new "Space" (Hugging Face's term for a hosted demo app) using the **Gradio** framework — a tool for quickly building simple web interfaces for AI models, no web-development experience required
+3. Uploaded three things to that Space: the app code (`app.py`), the list of required software (`requirements.txt`), and the trained model file (`fusion_model_final.pt`)
+4. Hugging Face automatically builds and hosts the app — no server management, no cost, and it's instantly live at a public web address
+5. Fixed a couple of platform-specific compatibility issues along the way (e.g. how the app requests temporary GPU access from Hugging Face's free tier)
+
+## 9. How to Use It (No Technical Knowledge Required)
+
+1. Open the live demo: **[huggingface.co/spaces/iyinoluwa/moderation-demo](https://huggingface.co/spaces/iyinoluwa/moderation-demo)**
+2. Upload any product photo (a bag, shoe, book, anything)
+3. Type a product title in the text box
+4. Click "Check consistency"
+5. The app tells you whether it thinks the photo and text match, with a confidence percentage
+
+**Try this to see it work:** upload a photo of one item, but type a title describing a *completely different* item. The model should flag it as "non-compliant." Then try a matching photo/title pair — it should say "compliant."
+
+**Note:** the model was trained only on French-language product listings, so it performs best with French text — English titles are outside what it learned from, which is a known and documented limitation.
+
+## 10. Honest Limitations
+
+- This demonstrates a proxy capability (detecting artificially created mismatches), not real content-policy violations, since that data isn't publicly available
+- Trained on a subset of the full dataset (20,000 of 85,000 listings) due to free-tier computing constraints
+- Performs best on French text
+- Weakest at distinguishing mismatches within visually similar/broad categories (e.g. two different home/garden items), and strongest across very different categories (e.g. a book photo vs. a toy photo)
+
+## 11. Reproducing This Project Yourself
+
+1. Download the dataset from [ENS Challenge Data](https://challengedata.ens.fr/challenges/35)
+2. Upload the data files to your own Google Drive
+3. Open `notebooks/moderation_pipeline_v2.ipynb` in Google Colab
+4. Set the runtime to use a free GPU (Runtime → Change runtime type → T4 GPU)
+5. Run all the cells from top to bottom
+6. The trained model and results will save automatically to your Drive

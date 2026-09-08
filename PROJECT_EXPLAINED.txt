@@ -1,0 +1,378 @@
+MULTIMODAL CONTENT MODERATION PROJECT — FULL EXPLANATION
+===========================================================
+(Written for someone with no machine learning background)
+
+
+PART 1: WHAT PROBLEM IS THIS SOLVING?
+---------------------------------------
+
+Every online store listing has two pieces: a picture of the product, and
+text describing it (a title, sometimes a longer description).
+
+Most of the time, obviously, the picture and the text match. But not
+always. Sometimes a seller:
+
+  - Reuses an old product photo for a brand new listing (laziness, or a
+    mistake during a bulk upload of hundreds of products at once)
+  - Accidentally attaches the wrong image file
+  - Deliberately shows a nicer or different product than what's actually
+    for sale, to trick buyers into clicking (a classic "bait and switch")
+
+Big online marketplaces — think Amazon, Jumia, Etsy — receive thousands of
+new listings every single day. No human team could possibly check each one
+by eye to make sure the photo matches the text. So platforms build
+automated systems to flag suspicious listings for a human to review.
+
+This project builds one small piece of such a system: an AI model that
+looks at a product's photo AND its text together, and decides whether they
+genuinely belong together or not.
+
+
+PART 2: WHY DOES THIS NEED "AI THAT LOOKS AT BOTH AT ONCE"?
+--------------------------------------------------------------
+
+This is the most important idea in the whole project, so it's worth
+explaining carefully with an example.
+
+Imagine you show a computer program ONLY this piece of text:
+    "Piscine hors sol gré 915 x 470 cm" (an above-ground swimming pool)
+
+There's nothing wrong with that sentence at all. It's a perfectly normal,
+well-formed product title. A program reading only this text has zero
+reason to be suspicious.
+
+Now imagine you show a DIFFERENT computer program ONLY this image:
+    [a photograph of a motorcycle helmet]
+
+Again — nothing wrong with this on its own. It's a normal, clear photo of
+a normal product. A program looking only at this image has zero reason to
+be suspicious either.
+
+The problem only becomes visible when you look at BOTH together: a pool
+listing... with a helmet photo. That's clearly wrong. But you can only see
+that it's wrong by comparing the two.
+
+This is why the project needed to build something called a "multimodal"
+model — "multi" meaning more than one, "modal" referring to a mode/type of
+information (text is one mode, images are another mode). The model has to
+hold both pieces of information in its "head" at the same time and
+directly compare them, rather than just looking at either one alone.
+
+To prove this claim (that you genuinely need both, not just one), the
+project deliberately built three separate models and compared them:
+
+  1. A model that can ONLY see the text (never the photo)
+  2. A model that can ONLY see the photo (never the text)
+  3. A model that can see BOTH at once
+
+If the "both together" model dramatically outperforms the other two, that
+proves the multimodal approach is actually necessary — not just a fancy
+technique for its own sake. And that's exactly what happened (see Part 5).
+
+
+PART 3: WHERE DID THE DATA COME FROM, AND AN IMPORTANT HONEST DETOUR
+------------------------------------------------------------------------
+
+The original idea for this project was more ambitious: build a system
+that detects genuinely PROHIBITED items — weapons, drugs, banned goods —
+being sold on a marketplace under a disguised description.
+
+Here's the honest problem that was discovered while trying to build this:
+there is no public, freely downloadable dataset anywhere that contains
+real examples of prohibited items being sold with photos and captions.
+This makes complete sense if you think about it — no legitimate company
+is going to publish a dataset of "here are 10,000 examples of people
+successfully selling illegal weapons on our platform." That data, if it
+exists at all, is kept strictly private for obvious legal and safety
+reasons.
+
+One academic research paper was found that had built exactly this kind of
+dataset (real prohibited items: firearms, controlled knives, protected
+animal parts, etc.) — but access to it requires submitting a formal
+request to the researchers, agreeing to a data-usage contract, and is
+restricted to non-commercial academic research only. That's not something
+that could be obtained and used freely for an open portfolio project on a
+reasonable timeline.
+
+So a decision was made — and this is worth explaining, because it's a
+GOOD decision, not a compromise or a lesser version of the idea — to
+build the exact same underlying capability (an AI that checks whether
+text and image truly correspond) using a substitute task that CAN be
+built honestly with public data.
+
+The substitute task: instead of "does the photo show a banned item,"
+the question becomes "does the photo actually match this specific
+listing's text, or has it been swapped with an unrelated product's
+photo." This requires the exact same skill — comparing text and image —
+and it's something that can be constructed and verified with total
+certainty, because the researcher (in this case, deliberately performing
+the swap) knows exactly which listings were altered and which weren't.
+
+This is a well-established and respected approach in machine learning
+research, called using a "proxy task" — building a stand-in problem that
+exercises the same underlying skill as the real problem you eventually
+want to solve, when the real problem's data isn't available.
+
+The underlying real dataset used was released publicly by Rakuten (a
+major French e-commerce company) for an academic research competition. It
+contains about 85,000 real product listings — each with a title, an
+optional longer description, and a photo — covering 27 different product
+categories (books, toys, furniture, video games, home & garden items, and
+so on).
+
+
+PART 4: HOW THE "FAKE MISMATCH" LABELS WERE ACTUALLY CREATED
+------------------------------------------------------------------
+
+Here's the precise mechanical process, explained simply:
+
+  1. Start with all ~85,000 real listings, each correctly matched (their
+     real photo, their real title).
+
+  2. Randomly select 25% of these listings.
+
+  3. For each selected listing, find a DIFFERENT listing from a
+     completely different, unrelated category — for example, if the
+     selected listing was a book, find a donor listing from home/garden
+     or toys, NOT another book (books look/read similarly to each other,
+     so swapping between two books would create a much harder, blurrier
+     signal to learn from).
+
+  4. Take that donor listing's photo and attach it to the selected
+     listing instead of its real photo. Now this listing's text describes
+     one thing, but its photo shows a completely unrelated product.
+
+  5. Mark this listing as "non-compliant" (mismatched). All the untouched
+     75% of listings are marked "compliant" (genuine).
+
+  6. Carefully double-check that this process created a good balance —
+     for example, verifying that all three broad category groups
+     (books/media, toys/games, home/furniture/garden) ended up with
+     almost exactly 25% of their listings marked as non-compliant, so the
+     AI can't cheat by just memorizing "if it's a book category, it's
+     probably fine" — the mismatch rate is deliberately even across all
+     groups.
+
+At the end of this process, there's a dataset of 85,000 listings where we
+know, with complete certainty, exactly which 25% have a mismatched photo
+and which 75% don't. This becomes the "answer key" used to train and test
+the AI models.
+
+
+PART 5: THE THREE MODELS, EXPLAINED SIMPLY, AND THE RESULTS
+------------------------------------------------------------------
+
+MODEL 1: TEXT-ONLY
+This model reads only the title and description of a listing — it never
+sees the photo at all. It tries to guess: is this listing's (invisible to
+it) photo a match or a mismatch? Since the text itself was never changed
+during the label-creation process, there's genuinely no information in
+the text that reveals whether the photo was swapped. As expected, this
+model performed only slightly better than random guessing.
+   Score: 0.30 out of 1.00 (where 1.00 would be a perfect model)
+
+MODEL 2: IMAGE-ONLY
+This model looks only at the photo — it never sees the text. The photo,
+even when it's been "swapped in" from a donor listing, is still a
+perfectly normal, real, valid photo of SOME product. There's nothing
+inherently "wrong-looking" about a swapped photo in isolation; it only
+becomes wrong when compared to text it doesn't belong with. As expected,
+this model also performed only slightly better than random guessing.
+   Score: 0.25 out of 1.00
+
+MODEL 3: FUSION (BOTH TOGETHER) — THE MAIN RESULT
+This model sees both the text and the photo at the same time, and — this
+is the key technical design choice — it doesn't just glance at both and
+guess; it explicitly computes how DIFFERENT the text and photo "feel" to
+each other, using a mathematical comparison (calculating both the
+difference and the product of their internal representations). This
+gives the model a direct signal to detect "these two don't seem to go
+together," rather than hoping it stumbles onto that insight on its own.
+   Score: 0.63 out of 1.00 — more than DOUBLE either single-mode model.
+
+This result is the central proof of the whole project: text alone can't
+solve it, image alone can't solve it, but combining them — and giving the
+model a way to directly compare them — solves it dramatically better.
+
+
+PART 6: WHAT "SCORE" MEANS HERE (F1 SCORE, EXPLAINED SIMPLY)
+------------------------------------------------------------------
+
+The specific number used to measure performance is called an "F1 score."
+Without the math, here's the intuition: imagine the model is a security
+guard whose job is to catch the 25% of listings that are genuinely
+mismatched (like finding needles in a haystack, since mismatches are the
+minority). F1 score balances two things at once:
+
+  - Precision: when the guard raises an alarm, how often is it actually a
+    real mismatch (vs. a false alarm on an innocent listing)?
+  - Recall: of ALL the real mismatches that exist, how many did the guard
+    actually catch (vs. letting some slip through)?
+
+A model that's good at only one of these two things (e.g. one that raises
+an alarm on literally every listing would have perfect recall but
+terrible precision) gets penalized. F1 score rewards a model that's
+reasonably good at BOTH at the same time. A score of 1.0 is a perfect
+guard; a score close to 0 means the guard basically isn't helping at all.
+
+
+PART 7: WHERE THE TRAINING ACTUALLY HAPPENED
+------------------------------------------------------------------
+
+All of the model training happened using Google Colab — a free service
+Google provides that lets anyone run code in the cloud, including access
+to powerful graphics cards (GPUs) that dramatically speed up AI training
+compared to a regular laptop. The entire notebook (a single file
+containing all the code, step by step) can be opened by anyone with a
+Google account and re-run from scratch, which is a form of
+"reproducibility" — an important value in good research and engineering
+practice, meaning someone else (or you, in the future) can verify and
+repeat the exact same process and get the same results.
+
+
+PART 8: HOW THE LIVE DEMO WORKS AND WAS DEPLOYED
+------------------------------------------------------------------
+
+After training, the "winning" fusion model — its learned internal
+parameters, essentially the accumulated knowledge it gained during
+training — was saved to a file (fusion_model_final.pt). This file is the
+actual "brain" of the system.
+
+To let anyone try the model without needing to know how to code, it was
+deployed to Hugging Face Spaces — a free platform specifically built for
+hosting AI demos publicly. The process was:
+
+  1. Write a small app (app.py) using a tool called Gradio, which handles
+     building the web page (the upload button, the text box, the "Check"
+     button, displaying results) with only a few dozen lines of code —
+     no web development expertise needed.
+
+  2. Upload the app code, a list of required software packages, and the
+     trained model file to a "Space" (Hugging Face's name for a hosted
+     project).
+
+  3. Hugging Face automatically builds and runs the app on its own
+     servers, for free, and gives it a permanent public web address.
+
+  4. A couple of platform-specific technical adjustments were needed
+     along the way — mainly related to how Hugging Face's free-tier
+     graphics card access works (it allocates a GPU only for the brief
+     moment a prediction is being made, rather than dedicating one
+     permanently, to share resources fairly across many free users).
+
+
+PART 9: HOW TO ACTUALLY USE THE FINISHED PRODUCT
+------------------------------------------------------------------
+
+  1. Go to: https://huggingface.co/spaces/iyinoluwa/moderation-demo
+  2. Click to upload a photo of any product (a bag, shoe, food item,
+     anything at all — it doesn't have to be from the original dataset)
+  3. Type in a product title describing what the item supposedly is
+  4. Click "Check consistency"
+  5. The app responds with either:
+       - "Compliant" (it thinks the photo and text genuinely match), or
+       - "Non-compliant" (it thinks something doesn't add up)
+     along with a confidence percentage
+
+TO SEE IT CATCH SOMETHING: try uploading a photo of one item (say, a
+handbag) but typing in a title that describes something totally different
+(say, "Casque de moto intégral" — a motorcycle helmet). The model should
+flag this as non-compliant.
+
+TO SEE A NORMAL RESULT: upload a matching photo and title — it should say
+compliant.
+
+IMPORTANT NOTE: this model was trained exclusively on French-language
+product listings (since the original Rakuten dataset was French). It will
+likely perform noticeably worse, or behave unpredictably, on English-
+language text, simply because it never saw English during training. This
+is a known, documented limitation, not a bug.
+
+
+PART 10: WHAT THIS PROJECT DOES NOT CLAIM TO DO
+------------------------------------------------------------------
+
+Being clear-eyed about limitations is part of doing this properly, so:
+
+  - This is NOT a system trained on real fraud or policy-violation data.
+    It demonstrates the underlying technical capability using a stand-in
+    problem, because real violation data isn't publicly available.
+
+  - It was trained on a subset of 20,000 listings (not the full 85,000)
+    due to the practical time/compute limits of free-tier cloud
+    resources. Training on the full dataset would very likely improve
+    results further, and is a natural next step.
+
+  - It performs best on French text and may behave unpredictably on
+    other languages.
+
+  - Looking closely at where the model makes mistakes revealed a
+    specific, understandable weakness: it's noticeably better at
+    catching mismatches between very DIFFERENT categories (like a book
+    photo attached to a toy listing) than mismatches within one broad,
+    visually varied category (like different types of home/garden items
+    swapped with each other). This makes intuitive sense — a swap is
+    more "obviously wrong" the more visually different the two products
+    are — and points to a specific, well-understood direction for future
+    improvement (deliberately training on harder, more subtle swaps).
+
+
+PART 11: GLOSSARY OF TERMS USED IN THIS PROJECT
+------------------------------------------------------------------
+
+Machine Learning / AI Model
+  A computer program that learns patterns from examples (data) rather
+  than being explicitly programmed with fixed rules.
+
+Multimodal
+  Involving more than one type/mode of information at once — in this
+  project, text and images together.
+
+Training
+  The process of showing an AI model many examples (in this case,
+  labeled listings) so it can learn to recognize patterns on its own.
+
+Fusion Model
+  A model specifically designed to combine information from multiple
+  sources (here, text and image) into one joint decision.
+
+DistilBERT
+  A pre-existing, publicly available AI model that has already learned a
+  strong general understanding of language, used here as a starting
+  point for processing text, rather than building a language-understanding
+  system entirely from scratch.
+
+ResNet18
+  A pre-existing, publicly available AI model that has already learned a
+  strong general understanding of images, used here as a starting point
+  for processing photos.
+
+F1 Score
+  A single number that measures how well a model balances catching real
+  positive cases (recall) against not raising too many false alarms
+  (precision). See Part 6 for a full explanation.
+
+Proxy Task
+  A substitute problem used to demonstrate the same underlying skill as a
+  harder-to-access real-world problem, when data for the real problem
+  isn't available.
+
+Google Colab
+  A free, cloud-based platform for running code, including access to
+  powerful graphics cards (GPUs), useful for training AI models faster
+  than a regular computer could manage alone.
+
+Hugging Face Spaces
+  A free platform for hosting and publicly sharing AI model demos.
+
+Gradio
+  A tool that makes it easy to build a simple web interface around an AI
+  model without needing web development skills.
+
+GitHub
+  A platform for storing and sharing code, and tracking changes to it
+  over time (version control).
+
+Git
+  The underlying version-control tool GitHub is built on top of; used to
+  track and manage changes to code over time.
