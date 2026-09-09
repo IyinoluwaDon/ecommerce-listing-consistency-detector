@@ -160,3 +160,49 @@ moderation-demo/
 4. Set the runtime to use a free GPU (Runtime → Change runtime type → T4 GPU)
 5. Run all the cells from top to bottom
 6. The trained model and results will save automatically to your Drive
+
+## 12. Known Deployment Gotchas (Hugging Face Spaces)
+
+Getting the live demo running on Hugging Face Spaces (free tier, Gradio SDK,
+ZeroGPU hardware) surfaced several real, non-obvious compatibility issues.
+Documented here so future setup (or anyone reproducing this) doesn't have
+to rediscover them:
+
+- **`README.md` in the Space repo requires a YAML config header** at the
+  very top (`title`, `sdk`, `sdk_version`, `app_file`, etc.) — without it,
+  the Space fails with a "Missing configuration" error. This is separate
+  from, and simpler than, the main project README.
+
+- **Gradio 4.44.0/4.44.1 have a known schema-parsing bug** (`TypeError:
+  argument of type 'bool' is not iterable`), unrelated to any code in this
+  project. Fixed by upgrading to **Gradio 5.x** (`sdk_version: "5.9.1"`
+  used here).
+
+- **ZeroGPU requires the inference function to be wrapped with
+  `@spaces.GPU`** applied as a genuine decorator at function-definition
+  time — not via reassignment after the fact (e.g. `predict =
+  spaces.GPU(fn)`), which breaks Gradio's ability to register it as an API
+  route. `demo.queue()` must also be called before `demo.launch()`, since
+  ZeroGPU dispatches decorated functions through Gradio's queue system.
+
+- **A `pydantic` version bump (2.11+) breaks Gradio 5 + ZeroGPU together**,
+  causing a generic, unhelpful `Error: No API found` when the app's button
+  is clicked (not at startup). This is a widely-reported upstream bug, not
+  specific to this project — fixed by pinning `pydantic==2.10.6` in
+  `requirements.txt`.
+
+**Final working `requirements.txt` for the Hugging Face Space:**
+```
+torch
+torchvision
+transformers
+pillow
+huggingface_hub==0.25.2
+spaces>=0.30.0
+pydantic==2.10.6
+```
+
+**Final working `sdk_version` in the Space's `README.md` header:**
+```
+sdk_version: "5.9.1"
+```
