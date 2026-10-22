@@ -206,3 +206,8 @@ pydantic==2.10.6
 ```
 sdk_version: "5.9.1"
 ```
+
+
+## Runtime checks and evaluation limits
+
+Model loading is deferred until prediction. The local fusion checkpoint and a downloaded/cached multilingual DistilBERT encoder are required. A missing artifact or network error is shown in the UI. The task is synthetic image/text mismatch detection, not a content-policy or fraud verdict. Split original product and donor-image identities before constructing swaps within each partition; row-level splitting after swaps may leak identities. Published notebook scores have not been independently reproduced in this cleanup.

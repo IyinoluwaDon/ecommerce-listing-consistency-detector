@@ -9,6 +9,7 @@ try:
 except ImportError:
     pass  # not running on a Spaces environment that requires this
 
+from threading import Lock
 from pathlib import Path
 import torch
 import torch.nn as nn
@@ -45,17 +46,25 @@ class FusionModel(nn.Module):
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-print("Loading text encoder...")
-tokenizer = AutoTokenizer.from_pretrained(TEXT_MODEL_NAME)
-text_encoder = AutoModel.from_pretrained(TEXT_MODEL_NAME).eval()  # stays on CPU until moved inside the GPU-decorated call
-for p in text_encoder.parameters():
-    p.requires_grad = False
+_model_lock = Lock()
+tokenizer = text_encoder = fusion_model = None
 
-print("Loading fusion model...")
-img_backbone = models.resnet18(weights=None)
-fusion_model = FusionModel(img_backbone)
-fusion_model.load_state_dict(torch.load(MODEL_PATH, map_location="cpu", weights_only=True))
-fusion_model.eval()
+def ensure_models():
+    global tokenizer, text_encoder, fusion_model
+    with _model_lock:
+        if fusion_model is not None:
+            return
+        print("Loading text encoder...")
+        tokenizer = AutoTokenizer.from_pretrained(TEXT_MODEL_NAME)
+        text_encoder = AutoModel.from_pretrained(TEXT_MODEL_NAME).eval()  # stays on CPU until moved inside the GPU-decorated call
+        for p in text_encoder.parameters():
+            p.requires_grad = False
+
+        print("Loading fusion model...")
+        img_backbone = models.resnet18(weights=None)
+        fusion_model = FusionModel(img_backbone)
+        fusion_model.load_state_dict(torch.load(MODEL_PATH, map_location="cpu", weights_only=True))
+        fusion_model.eval()
 
 img_transform = transforms.Compose([
     transforms.Resize((224, 224)),
@@ -68,6 +77,11 @@ img_transform = transforms.Compose([
 def _predict_impl(image, designation, description):
     if image is None or not designation or not designation.strip():
         return "Please provide both an image and a title.", None
+
+    try:
+        ensure_models()
+    except (OSError, RuntimeError) as exc:
+        return "Model unavailable. Check the local checkpoint and cached text encoder.", None
 
     # Move models to GPU here — ZeroGPU only attaches a real GPU inside
     # a @spaces.GPU-decorated call, not at module import time.
