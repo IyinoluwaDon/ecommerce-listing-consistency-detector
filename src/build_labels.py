@@ -20,6 +20,7 @@ modalities together can catch it.
 Usage:
     python build_labels.py --input_dir ../data --output_dir ../data --swap_frac 0.25 --seed 42
 """
+from pathlib import Path
 import argparse
 import numpy as np
 import pandas as pd
@@ -39,27 +40,34 @@ CODE_TO_GROUP = {code: g for g, codes in CATEGORY_GROUPS.items() for code in cod
 
 
 def build(input_dir: str, output_dir: str, swap_frac: float, seed: int):
+    if not np.isfinite(swap_frac) or not 0 <= swap_frac <= 1:
+        raise ValueError("swap_frac must be finite and between 0 and 1")
     rng = np.random.default_rng(seed)
 
     X = pd.read_csv(f"{input_dir}/X_train_update.csv", index_col=0)
     Y = pd.read_csv(f"{input_dir}/Y_train_CVw08PX.csv", index_col=0)
-    df = X.join(Y).reset_index(drop=True)
+    df = X.join(Y, validate="one_to_one").reset_index(drop=True)
     df["group"] = df["prdtypecode"].map(CODE_TO_GROUP)
 
-    assert df["group"].isna().sum() == 0, "Unmapped prdtypecode found — update CATEGORY_GROUPS."
+    if df["group"].isna().any():
+        raise ValueError("Missing labels or unmapped prdtypecode; update CATEGORY_GROUPS.")
 
     n = len(df)
     n_swap = int(n * swap_frac)
+    if n == 0 or (n_swap and df["group"].nunique() < 2):
+        raise ValueError("Need nonempty data and at least two groups for swaps")
     swap_idx = rng.choice(n, size=n_swap, replace=False)
+    pools = {g: df.index[df["group"] != g].to_numpy() for g in df["group"].unique()}
 
     df["label"] = 0  # 0 = compliant (genuine pair)
     df["orig_imageid"] = df["imageid"]
     df["orig_productid"] = df["productid"]
+    df["productid_for_image"] = df["productid"]
 
     # For each row selected for swapping, pick a donor row from a DIFFERENT group
     for idx in swap_idx:
         own_group = df.at[idx, "group"]
-        donor_pool = df.index[df["group"] != own_group]
+        donor_pool = pools[own_group]
         donor_idx = rng.choice(donor_pool)
         df.at[idx, "imageid"] = df.at[donor_idx, "orig_imageid"]
         df.at[idx, "productid_for_image"] = df.at[donor_idx, "orig_productid"]
@@ -79,6 +87,7 @@ def build(input_dir: str, output_dir: str, swap_frac: float, seed: int):
     out_cols = ["designation", "description", "productid", "imageid",
                 "orig_productid", "orig_imageid", "productid_for_image",
                 "prdtypecode", "group", "label"]
+    Path(output_dir).mkdir(parents=True, exist_ok=True)
     out_path = f"{output_dir}/train_with_mismatch_labels.csv"
     df[out_cols].to_csv(out_path, index=False)
     print(f"\nSaved -> {out_path}")

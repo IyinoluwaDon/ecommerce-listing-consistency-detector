@@ -9,6 +9,7 @@ try:
 except ImportError:
     pass  # not running on a Spaces environment that requires this
 
+from pathlib import Path
 import torch
 import torch.nn as nn
 import gradio as gr
@@ -16,7 +17,7 @@ from PIL import Image
 from torchvision import models, transforms
 from transformers import AutoTokenizer, AutoModel
 
-MODEL_PATH = "fusion_model_final.pt"  # must sit in the same repo, committed via Git LFS
+MODEL_PATH = Path(__file__).resolve().parent / "models" / "fusion_model_final.pt"  # must sit in the same repo, committed via Git LFS
 TEXT_MODEL_NAME = "distilbert-base-multilingual-cased"
 LABELS = ["compliant", "non-compliant"]
 
@@ -53,7 +54,7 @@ for p in text_encoder.parameters():
 print("Loading fusion model...")
 img_backbone = models.resnet18(weights=None)
 fusion_model = FusionModel(img_backbone)
-fusion_model.load_state_dict(torch.load(MODEL_PATH, map_location="cpu"))
+fusion_model.load_state_dict(torch.load(MODEL_PATH, map_location="cpu", weights_only=True))
 fusion_model.eval()
 
 img_transform = transforms.Compose([
@@ -65,7 +66,7 @@ img_transform = transforms.Compose([
 
 @torch.no_grad()
 def _predict_impl(image, designation, description):
-    if image is None or not designation:
+    if image is None or not designation or not designation.strip():
         return "Please provide both an image and a title.", None
 
     # Move models to GPU here — ZeroGPU only attaches a real GPU inside
@@ -84,8 +85,8 @@ def _predict_impl(image, designation, description):
     logits = fusion_model(img_tensor, text_emb)
     probs = torch.softmax(logits, dim=1).squeeze(0).cpu()
 
-    result_label = f"{'✅ Compliant' if probs[0] > probs[1] else '⚠️ Non-compliant'}"
-    confidence_dict = {"compliant": float(probs[0]), "non-compliant": float(probs[1])}
+    result_label = f"{'Matching pair' if probs[0] > probs[1] else 'Possible mismatch'}"
+    confidence_dict = {"matching pair": float(probs[0]), "possible mismatch": float(probs[1])}
 
     return result_label, confidence_dict
 
