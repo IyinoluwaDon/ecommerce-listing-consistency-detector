@@ -25,3 +25,6 @@ venv/
 
 .env
 .pytest_cache/
+
+# Local product images, datasets, and source archives
+data/
