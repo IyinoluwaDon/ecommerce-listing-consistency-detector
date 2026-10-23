@@ -25,7 +25,7 @@ The test suite covers mismatch-label generation. A synthetic forward pass has ch
 
 ## Repository map
 
-`notebooks/` contains the experiment. `src/` contains shared code and label generation. `app.py` is the demo entry point; `tests/` covers label construction. Dataset files and some model resources are not stored in this repository.
+`notebooks/` contains the experiment. `src/` contains shared code and label generation. `app.py` is the demo entry point; `tests/` covers label construction. The trained image checkpoint is stored in `models/`; the large datasets remain local in the ignored `data/` folder.
 
 ## Evidence and limitations
 
