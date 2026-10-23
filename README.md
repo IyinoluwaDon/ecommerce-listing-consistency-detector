@@ -1,38 +1,19 @@
-# Product Listing Image–Text Consistency Experiment
+# E-commerce Listing Consistency Project
 
-A multimodal research project that compares a product image with its title/description to identify deliberately constructed image–text mismatches. The mismatch label is a proxy task, not a general content-moderation decision.
+This project compares a product image with its title and description to study synthetic image-text mismatches. Its labels are experimental proxy classes, not moderation decisions or a general content-safety classifier.
 
-## What is included
+## Components
 
-- Notebook-based data preparation and experiment workflow
-- Image/text fusion model and demo code, with a separately maintained Hugging Face Space
-- Label-generation regression tests and checkpoint loading safeguards
+- `github-main/` — the canonical GitHub repository checkout on `main`. It contains the research workflow, source, tests, and local data. Large data files are ignored by Git.
+- `huggingface-space/` — the hosted Gradio demo checkout, maintained in its own Hugging Face Space repository so that the Space's `app.py`, `requirements.txt`, model, and README configuration stay at that repository's root.
+- `github-api-branch/` — an optional local FastAPI experiment on another branch of the same GitHub repository. It is not required to run or deploy the canonical project and is not included when pushing `github-main`'s `main` branch.
 
-## Hosted demo
-
-The hosted Gradio demo runs as a separate Hugging Face Space so its deployment files remain at the Space repository root. [Open the Hugging Face demo](https://huggingface.co/spaces/iyinoluwa/moderation-demo). Its prediction is a synthetic listing-consistency signal, not a moderation decision.
+The Space checkpoint is byte-for-byte identical to the main checkout's model checkpoint. GitHub stores the project source; Hugging Face builds and hosts the demo.
 
 ## Run locally
 
-```sh
-python -m pip install -r requirements.txt
-python -m pytest -q
-```
+Use `github-main/README.md` for installation, tests, and the research workflow. To run the hosted demo locally, enter `huggingface-space/` and follow its README. Run Git commands from the relevant component folder so commits go to the intended repository. The suite folder itself is not a Git repository.
 
-## Verify
+## Data and limitations
 
-The test suite covers mismatch-label generation. A synthetic forward pass has checked the image checkpoint/model contract. The full text-encoder and hosted UI path requires model downloads and has not been verified end to end.
-
-## Repository map
-
-`notebooks/` contains the experiment. `src/` contains shared code and label generation. `app.py` is the demo entry point; `tests/` covers label construction. Dataset files and some model resources are not stored in this repository.
-
-## Evidence and limitations
-
-Label tests pass and a synthetic image-model forward pass is finite. This does not validate semantic matching quality, text-encoder downloads, or the hosted application.
-
-The task uses synthetic/donor mismatch construction and is not a policy moderation system. Build train/validation splits before donor swaps to avoid leakage. Confirm dataset licenses, then evaluate on representative real listings and run the complete encoder/UI path before deployment.
-
-## License
-
-No repository license file is included. Unless the project owner adds a license, do not assume the code, data or model artifacts may be redistributed or reused. Verify third-party data and model terms separately.
+The local datasets are large and remain under `github-main/data/`, ignored by Git. This project has not established real-world semantic matching quality or moderation performance; evaluate it with a representative, license-cleared dataset before relying on predictions.
