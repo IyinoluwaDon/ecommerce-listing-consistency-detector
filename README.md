@@ -5,8 +5,12 @@ A multimodal research project that compares a product image with its title/descr
 ## What is included
 
 - Notebook-based data preparation and experiment workflow
-- Image/text fusion model and Hugging Face demo source
+- Image/text fusion model and demo code, with a separately maintained Hugging Face Space
 - Label-generation regression tests and checkpoint loading safeguards
+
+## Hosted demo
+
+The hosted Gradio demo runs as a separate Hugging Face Space so its deployment files remain at the Space repository root. [Open the Hugging Face demo](https://huggingface.co/spaces/iyinoluwa/moderation-demo). Its prediction is a synthetic listing-consistency signal, not a moderation decision.
 
 ## Run locally
 
